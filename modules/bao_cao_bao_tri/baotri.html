@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Quản lý Bảo trì</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        /* Màu trạng thái cho đẹp */
+        .badge-Cho_Duyet { background-color: #ffc107; color: black; } /* Vàng */
+        .badge-Dang_Sua { background-color: #0d6efd; } /* Xanh dương */
+        .badge-Hoan_Thanh { background-color: #198754; } /* Xanh lá */
+        .badge-Huy { background-color: #6c757d; } /* Xám */
+    </style>
+</head>
+<body class="bg-light p-3">
+
+<div class="container card shadow p-0">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fa-solid fa-screwdriver-wrench"></i> THEO DÕI BẢO TRÌ</h5>
+        <button class="btn btn-light text-primary fw-bold" onclick="openModalAdd()">
+            <i class="fa-solid fa-plus"></i> Báo lỗi mới
+        </button>
+    </div>
+    <div class="card-body">
+        <table class="table table-bordered table-hover align-middle text-center">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Người báo</th>
+                    <th>Thiết bị gặp lỗi</th>
+                    <th>Mô tả lỗi</th>
+                    <th>Ngày báo</th>
+                    <th>Trạng thái</th>
+                    <th>Phản hồi Admin</th>
+                    <th>Xử lý</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="modalBaoTri">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Gửi yêu cầu bảo trì</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="id_bao_cao"> <div id="selectGroup">
+                    <div class="mb-3">
+                        <label>Người báo cáo:</label>
+                        <select id="selectUser" class="form-select"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label>Thiết bị hỏng:</label>
+                        <select id="selectDevice" class="form-select"></select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label>Mô tả lỗi:</label>
+                    <textarea id="mo_ta_loi" class="form-control" rows="3"></textarea>
+                </div>
+
+                <div id="adminGroup" class="d-none p-3 bg-light border rounded">
+                    <h6>Dành cho Admin:</h6>
+                    <div class="mb-2">
+                        <label>Trạng thái:</label>
+                        <select id="trang_thai" class="form-select">
+                            <option value="Cho_Duyet">Chờ duyệt</option>
+                            <option value="Dang_Sua">Đang sửa</option>
+                            <option value="Hoan_Thanh">Hoàn thành</option>
+                            <option value="Huy">Hủy bỏ</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label>Ghi chú/Phản hồi:</label>
+                        <input type="text" id="phan_hoi" class="form-control">
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary" id="btnSave">Lưu lại</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    loadData();
+    loadOptions(); // Tải danh sách user/máy vào dropdown ngay khi mở trang
+
+    // 1. Tải danh sách báo cáo
+    function loadData() {
+        $.post('api_baotri.php', { action: 'fetch' }, function(data) {
+            let html = '';
+            data.forEach(row => {
+                // Tạo label trạng thái đẹp mắt
+                let statusLabel = `<span class="badge badge-${row.trang_thai_bao_cao}">${row.trang_thai_bao_cao}</span>`;
+                
+                html += `
+                    <tr>
+                        <td>${row.id_bao_cao}</td>
+                        <td class="fw-bold">${row.ten_dang_nhap}</td>
+                        <td>${row.ten_thiet_bi} <br> <small class="text-muted">(${row.ma_thiet_bi})</small></td>
+                        <td class="text-start">${row.mo_ta_loi}</td>
+                        <td>${row.ngay_bao}</td>
+                        <td>${statusLabel}</td>
+                        <td>${row.phan_hoi_admin || '-'}</td>
+                        <td>
+                            <button class="btn btn-warning btn-sm" onclick='openModalEdit(${JSON.stringify(row)})'>
+                                <i class="fa-solid fa-pen-to-square"></i> Xử lý
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteReport(${row.id_bao_cao})">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            $('#tableBody').html(html);
+        }, 'json');
+    }
+
+    // 2. Tải User và Máy vào Dropdown (Select)
+    function loadOptions() {
+        $.post('api_baotri.php', { action: 'load_options' }, function(data) {
+            // Đổ user
+            let userOpt = '';
+            data.users.forEach(u => userOpt += `<option value="${u.id_nguoi_dung}">${u.ten_dang_nhap}</option>`);
+            $('#selectUser').html(userOpt);
+
+            // Đổ máy
+            let deviceOpt = '';
+            data.devices.forEach(d => deviceOpt += `<option value="${d.id_thiet_bi}">${d.ten_thiet_bi} - ${d.ma_thiet_bi}</option>`);
+            $('#selectDevice').html(deviceOpt);
+        }, 'json');
+    }
+
+    // 3. Xử lý mở Modal THÊM
+    window.openModalAdd = function() {
+        $('#modalTitle').text('Báo lỗi mới');
+        $('#id_bao_cao').val(''); // Xóa ID
+        $('#mo_ta_loi').val('');
+        
+        // Hiện phần chọn, Ẩn phần Admin
+        $('#selectGroup').show();
+        $('#adminGroup').addClass('d-none');
+        
+        $('#modalBaoTri').modal('show');
+    }
+
+    // 4. Xử lý mở Modal SỬA (ADMIN DUYỆT)
+    window.openModalEdit = function(row) {
+        $('#modalTitle').text('Cập nhật trạng thái #' + row.id_bao_cao);
+        $('#id_bao_cao').val(row.id_bao_cao);
+        $('#mo_ta_loi').val(row.mo_ta_loi);
+        
+        // Ẩn phần chọn (không cho sửa người/máy), Hiện phần Admin
+        $('#selectGroup').hide();
+        $('#adminGroup').removeClass('d-none');
+        
+        // Điền dữ liệu cũ
+        $('#trang_thai').val(row.trang_thai_bao_cao);
+        $('#phan_hoi').val(row.phan_hoi_admin);
+
+        $('#modalBaoTri').modal('show');
+    }
+
+    // 5. Lưu dữ liệu (Chung cho cả Thêm và Sửa)
+    $('#btnSave').click(function() {
+        let id = $('#id_bao_cao').val();
+        let action = id ? 'update' : 'insert'; // Có ID là sửa, không là thêm
+        
+        let payload = {
+            action: action,
+            id: id,
+            id_nguoi_dung: $('#selectUser').val(),
+            id_thiet_bi: $('#selectDevice').val(),
+            mo_ta_loi: $('#mo_ta_loi').val(),
+            trang_thai: $('#trang_thai').val(),
+            phan_hoi: $('#phan_hoi').val()
+        };
+
+        $.post('api_baotri.php', payload, function(res) {
+            if(res) {
+                $('#modalBaoTri').modal('hide');
+                loadData(); // Tải lại bảng
+                alert('Thành công!');
+            } else {
+                alert('Có lỗi xảy ra!');
+            }
+        });
+    });
+
+    // 6. Xóa
+    window.deleteReport = function(id) {
+        if(confirm('Bạn có chắc muốn xóa báo cáo này?')) {
+            $.post('api_baotri.php', { action: 'delete', id: id }, function() {
+                loadData();
+            });
+        }
+    }
+});
+</script>
+
+</body>
+</html>
